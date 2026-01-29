@@ -1,0 +1,2 @@
+# kholuutru
+lưu hình ảnh
