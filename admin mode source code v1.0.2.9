@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>NEON RUNNER – FINAL STABLE</title>
+<style>
+body{margin:0;overflow:hidden;background:#000;font-family:Arial}
+#ui{
+  position:fixed;top:10px;left:50%;transform:translateX(-50%);
+  color:#fff;font-size:14px;display:flex;gap:14px;z-index:10;align-items:center
+}
+.bar{width:70px;height:8px;border:1px solid #fff}
+.fill{height:100%;background:#00ffcc;width:100%}
+#status{color:#ff5555;font-weight:bold}
+
+#console{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  background:#111;border:2px solid #0ff;
+  padding:10px;display:none;z-index:20
+}
+#console input{
+  width:300px;background:#000;color:#0f0;
+  border:none;font-size:16px;outline:none
+}
+
+#whiteOverlay{
+  position:fixed;inset:0;
+  background:#fff;
+  opacity:0;
+  pointer-events:none;
+  z-index:50;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <div>🏆 <span id="score">0</span></div>
+  <div>❤️ <span id="hp">3</span></div>
+  <div>A<div class="bar"><div id="cdA" class="fill"></div></div></div>
+  <div>D<div class="bar"><div id="cdD" class="fill"></div></div></div>
+  <div>⚡<div class="bar"><div id="cdB" class="fill"></div></div></div>
+  <div id="status"></div>
+</div>
+
+<div id="console"><input id="cmd" placeholder="Nhập lệnh..."></div>
+<div id="whiteOverlay"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+/* ===== SCENE ===== */
+const scene=new THREE.Scene();
+scene.fog=new THREE.Fog(0x000000,15,200);
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,500);
+camera.position.set(0,6,10);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const light=new THREE.DirectionalLight(0xffffff,1);
+light.position.set(5,10,5);
+scene.add(light);
+
+/* ===== UI ===== */
+const cdAEl=document.getElementById("cdA");
+const cdDEl=document.getElementById("cdD");
+const cdBEl=document.getElementById("cdB");
+const statusEl=document.getElementById("status");
+const overlay=document.getElementById("whiteOverlay");
+
+/* ===== STATE ===== */
+let score=0,health=3;
+let admin=false,peaceful=false,gameOver=false;
+let baseSpeed=0.4,speedMul=1;
+
+/* WIN */
+let winScore=null;
+let winTriggered=false;
+let winPlane=null;
+let winZ=-200;
+let overlayAlpha=0;
+
+/* weapon */
+let weaponMode="rifle";
+
+/* cooldown */
+let cdA=0,cdD=0,cdB=0;
+const maxCD=3;
+
+/* boost */
+let boosting=false,boostTime=0;
+
+/* ===== PLAYER ===== */
+let lane=0,vy=0,onGround=true;
+const player=new THREE.Mesh(
+  new THREE.BoxGeometry(1,1,1),
+  new THREE.MeshStandardMaterial({color:0x00ffff})
+);
+player.position.set(0,0.5,2);
+scene.add(player);
+
+/* ===== ROAD ===== */
+const road=[];
+for(let i=0;i<30;i++){
+  const t=new THREE.Mesh(
+    new THREE.BoxGeometry(8,0.1,10),
+    new THREE.MeshStandardMaterial({color:i%2?0x111111:0x1a1a1a})
+  );
+  t.position.z=-i*10;
+  scene.add(t);road.push(t);
+}
+
+/* ===== OBJECTS ===== */
+const bullets=[],slashes=[],grenades=[],obstacles=[];
+
+/* ===== INPUT ===== */
+let shooting=false;
+addEventListener("keydown",e=>{
+  if(gameOver||winTriggered) return;
+  if(e.key==="ArrowLeft") lane=Math.max(-1,lane-1);
+  if(e.key==="ArrowRight") lane=Math.min(1,lane+1);
+  if(e.key==="ArrowUp"&&onGround){vy=0.3;onGround=false}
+  if(e.key==="w") shooting=true;
+
+  if(e.key==="a"&&(admin||cdA<=0)){slash();if(!admin)cdA=maxCD}
+  if(e.key==="d"&&(admin||cdD<=0)){grenade();if(!admin)cdD=maxCD}
+
+  if(e.key==="Shift"&&!boosting&&(admin||cdB<=0)){
+    boosting=true;boostTime=600;
+    speedMul*=3;health=50;
+    if(!admin)cdB=maxCD;
+  }
+  if(e.key==="/"){consoleBox.style.display="block";cmd.focus()}
+});
+addEventListener("keyup",e=>{ if(e.key==="w") shooting=false });
+
+/* ===== CONSOLE ===== */
+const consoleBox=document.getElementById("console");
+const cmd=document.getElementById("cmd");
+cmd.addEventListener("keydown",e=>{
+  if(e.key!=="Enter") return;
+  const c=cmd.value.trim();
+  cmd.value="";consoleBox.style.display="none";
+
+  if(c==="/admin on"){admin=true;statusEl.textContent="ADMIN";return}
+  if(c==="/admin off"){admin=false;statusEl.textContent="NORMAL";return}
+
+  if(c==="/peaceful"){
+    peaceful=true;
+    obstacles.forEach(o=>scene.remove(o));
+    obstacles.length=0;
+    statusEl.textContent="PEACEFUL";return;
+  }
+  if(c==="/play"){peaceful=false;statusEl.textContent="PLAY";return}
+
+  if(c.startsWith("/scr")){
+    const v=parseInt(c.split(" ")[1]);
+    if(!isNaN(v)) score=v;
+    return;
+  }
+  if(c.startsWith("/spd")){
+    const v=parseInt(c.split(" ")[1]);
+    if(!isNaN(v)) speedMul=v;
+    return;
+  }
+
+  if(c==="/shtgun"){weaponMode="shotgun";return}
+  if(c==="/rifle"){weaponMode="rifle";return}
+
+  if(c.startsWith("/win at")){
+    const v=parseInt(c.split(" ")[2]);
+    if(v>0){winScore=v;statusEl.textContent="WIN AT "+v}
+  }
+});
+
+/* ===== COMBAT ===== */
+function shoot(){
+  if(weaponMode==="rifle"){
+    createBullet(0,0xffff00,0.15,1);
+  }else{
+    createBullet(-0.25,0xff0000,0.3,2);
+    createBullet(0,0xff0000,0.3,2);
+    createBullet(0.25,0xff0000,0.3,2);
+  }
+}
+function createBullet(dx,color,size,damage){
+  const b=new THREE.Mesh(
+    new THREE.SphereGeometry(size),
+    new THREE.MeshStandardMaterial({color,emissive:color})
+  );
+  b.position.copy(player.position);
+  b.velZ=-2;b.velX=dx;b.dmg=damage;
+  scene.add(b);bullets.push(b);
+}
+function slash(){
+  const s=new THREE.Mesh(
+    new THREE.BoxGeometry(3,0.4,1.5),
+    new THREE.MeshStandardMaterial({color:0x00ffff,emissive:0x00ffff})
+  );
+  s.position.set(player.position.x,1,player.position.z-2);
+  s.vel=-1.4;
+  scene.add(s);slashes.push(s);
+}
+function grenade(){
+  const g=new THREE.Mesh(
+    new THREE.SphereGeometry(0.4),
+    new THREE.MeshStandardMaterial({color:0xffaa00,emissive:0xff6600})
+  );
+  g.position.copy(player.position);
+  g.vel=-1;
+  scene.add(g);grenades.push(g);
+}
+
+/* ===== OBSTACLE ===== */
+function spawnObstacle(){
+  const o=new THREE.Mesh(
+    new THREE.BoxGeometry(1.5,1.5,1.5),
+    new THREE.MeshStandardMaterial({color:0xff0000})
+  );
+  o.hp=10;
+  o.position.set((Math.floor(Math.random()*3)-1)*2,0.75,-80);
+  scene.add(o);obstacles.push(o);
+}
+function hit(a,b){
+  return Math.abs(a.position.x-b.position.x)<1 &&
+         Math.abs(a.position.z-b.position.z)<1;
+}
+
+/* ===== WIN ===== */
+function triggerWin(){
+  winTriggered=true;
+  statusEl.textContent="YOU WIN";
+  const tex=new THREE.TextureLoader().load("win.png");
+  winPlane=new THREE.Mesh(
+    new THREE.PlaneGeometry(20,20),
+    new THREE.MeshBasicMaterial({map:tex})
+  );
+  winPlane.position.set(0,5,winZ);
+  scene.add(winPlane);
+}
+
+/* ===== LOOP ===== */
+let tick=0;
+function animate(){
+  requestAnimationFrame(animate);
+
+  if(gameOver) return;
+
+  tick++;score++;
+
+  if(boosting && --boostTime<=0){
+    boosting=false;speedMul=1;health=3;
+  }
+
+  if(!admin){
+    cdA=Math.max(0,cdA-1/60);
+    cdD=Math.max(0,cdD-1/60);
+    cdB=Math.max(0,cdB-1/60);
+  }else cdA=cdD=cdB=0;
+
+  cdAEl.style.width=(1-cdA/maxCD)*100+"%";
+  cdDEl.style.width=(1-cdD/maxCD)*100+"%";
+  cdBEl.style.width=(1-cdB/maxCD)*100+"%";
+
+  if(shooting && tick%6===0) shoot();
+
+  bullets.forEach((b,i)=>{
+    b.position.z+=b.velZ;b.position.x+=b.velX;
+    obstacles.forEach((o,oi)=>{
+      if(hit(b,o)){
+        o.hp-=b.dmg;
+        scene.remove(b);bullets.splice(i,1);
+        if(o.hp<=0){scene.remove(o);obstacles.splice(oi,1)}
+      }
+    });
+  });
+
+  slashes.forEach(s=>{
+    s.position.z+=s.vel;
+    obstacles.forEach((o,oi)=>{
+      if(hit(s,o)){
+        o.hp-=5;
+        if(o.hp<=0){scene.remove(o);obstacles.splice(oi,1)}
+      }
+    });
+  });
+
+  grenades.forEach((g,i)=>{
+    g.position.z+=g.vel;
+    obstacles.forEach((o,oi)=>{
+      if(hit(g,o)){
+        scene.remove(o);obstacles.splice(oi,1);
+        scene.remove(g);grenades.splice(i,1);
+      }
+    });
+  });
+
+  if(!peaceful && tick%30===0) spawnObstacle();
+
+  obstacles.forEach((o,i)=>{
+    o.position.z+=baseSpeed*speedMul;
+    if(hit(o,player)){
+      if(!admin) health--;
+      scene.remove(o);obstacles.splice(i,1);
+      if(health<=0){gameOver=true;statusEl.textContent="GAME OVER"}
+    }
+  });
+
+  player.position.x+=(lane*2-player.position.x)*0.3;
+  vy-=0.02;player.position.y+=vy;
+  if(player.position.y<=0.5){player.position.y=0.5;vy=0;onGround=true}
+
+  road.forEach(t=>{
+    t.position.z+=baseSpeed*speedMul;
+    if(t.position.z>10) t.position.z-=300;
+  });
+
+  if(!winTriggered && winScore!==null && score>=winScore) triggerWin();
+
+  if(winTriggered){
+    winZ+=2;
+    winPlane.position.z=winZ;
+    winPlane.scale.multiplyScalar(1.01);
+    if(winZ>-10){
+      overlayAlpha=Math.min(1,overlayAlpha+0.01);
+      overlay.style.opacity=overlayAlpha;
+    }
+  }
+
+  scoreEl.textContent=score;
+  hp.textContent=health;
+  renderer.render(scene,camera);
+}
+
+const scoreEl=document.getElementById("score");
+const hp=document.getElementById("hp");
+animate();
+</script>
+</body>
+</html>
