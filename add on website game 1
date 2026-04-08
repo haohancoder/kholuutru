@@ -5,15 +5,35 @@
     if (oldBtn) oldBtn.remove();
     if (oldWin) oldWin.remove();
 
-    // 2. Tạo nút nổi di chuyển được
+    // 2. Thêm style hiệu ứng LED RGB vào trang
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes rgb-border {
+            0% { border-color: #ff0000; box-shadow: 0 0 15px #ff0000; }
+            20% { border-color: #ff00ff; box-shadow: 0 0 15px #ff00ff; }
+            40% { border-color: #0000ff; box-shadow: 0 0 15px #0000ff; }
+            60% { border-color: #00ffff; box-shadow: 0 0 15px #00ffff; }
+            80% { border-color: #00ff00; box-shadow: 0 0 15px #00ff00; }
+            100% { border-color: #ff0000; box-shadow: 0 0 15px #ff0000; }
+        }
+        .rgb-led-btn {
+            animation: rgb-border 3s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // 3. Tạo nút nổi với class LED
     const btn = document.createElement('div');
     btn.id = 'magic-btn';
+    btn.className = 'rgb-led-btn'; // Áp dụng hiệu ứng LED
     const imgSrc = "https://raw.githubusercontent.com/haohancoder/meme/main/z7250808451631_46bc4dacd82d9967236ddfd2530812db.jpg";
     
     Object.assign(btn.style, {
         position: 'fixed', top: '150px', left: '30px', width: '60px', height: '60px',
         backgroundImage: `url('${imgSrc}')`, backgroundSize: 'cover', borderRadius: '50%',
-        cursor: 'move', zIndex: '2147483647', border: '2px solid #00ff00', boxShadow: '0 0 10px #00ff00'
+        cursor: 'move', zIndex: '2147483647', 
+        border: '3px solid #ff0000', // Viền khởi tạo
+        transition: 'transform 0.1s'
     });
     document.body.appendChild(btn);
 
@@ -32,7 +52,7 @@
         document.onmouseup = () => { document.onmousemove = null; };
     };
 
-    // 3. Hàm tải và chạy trực tiếp code từ GitHub (Tránh màn hình đen)
+    // 4. Hàm tải và chạy trực tiếp code
     btn.onclick = async () => {
         if (isDragging) return;
 
@@ -47,11 +67,10 @@
         Object.assign(win.style, {
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
             width: '800px', height: '550px', backgroundColor: '#fff', zIndex: '2147483646',
-            border: '3px solid #00ff00', borderRadius: '10px', overflow: 'hidden',
+            border: '3px solid #333', borderRadius: '10px', overflow: 'hidden',
             boxShadow: '0 0 30px rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column'
         });
 
-        // Tạo vùng chứa nội dung game
         const content = document.createElement('iframe');
         content.style.width = '100%';
         content.style.height = '100%';
@@ -60,17 +79,12 @@
         document.body.appendChild(win);
 
         try {
-            // Lấy code trực tiếp từ GitHub
             const response = await fetch("https://raw.githubusercontent.com/haohancoder/kholuutru/main/admin%20mode%20source%20code%20v1.0.2.9");
             const rawHtml = await response.text();
-
-            // Ghi code trực tiếp vào iframe để trình duyệt tự render mà không cần qua trang trung gian
             const doc = content.contentWindow.document;
             doc.open();
             doc.write(rawHtml);
             doc.close();
-
-            // Tự động focus để dùng bàn phím
             setTimeout(() => content.contentWindow.focus(), 500);
         } catch (err) {
             win.innerHTML = "<div style='padding:20px; color:red'>Lỗi tải code: " + err + "</div>";
