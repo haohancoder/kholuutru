@@ -1,0 +1,79 @@
+(function() {
+    // 1. Dọn dẹp bản cũ
+    const oldBtn = document.getElementById('magic-btn');
+    const oldWin = document.getElementById('game-window');
+    if (oldBtn) oldBtn.remove();
+    if (oldWin) oldWin.remove();
+
+    // 2. Tạo nút nổi di chuyển được
+    const btn = document.createElement('div');
+    btn.id = 'magic-btn';
+    const imgSrc = "https://raw.githubusercontent.com/haohancoder/meme/main/z7250808451631_46bc4dacd82d9967236ddfd2530812db.jpg";
+    
+    Object.assign(btn.style, {
+        position: 'fixed', top: '150px', left: '30px', width: '60px', height: '60px',
+        backgroundImage: `url('${imgSrc}')`, backgroundSize: 'cover', borderRadius: '50%',
+        cursor: 'move', zIndex: '2147483647', border: '2px solid #00ff00', boxShadow: '0 0 10px #00ff00'
+    });
+    document.body.appendChild(btn);
+
+    // Xử lý kéo thả nút
+    let isDragging = false;
+    btn.onmousedown = (e) => {
+        let startX = e.clientX - btn.offsetLeft;
+        let startY = e.clientY - btn.offsetTop;
+        isDragging = false;
+        const move = (ev) => {
+            isDragging = true;
+            btn.style.left = (ev.clientX - startX) + 'px';
+            btn.style.top = (ev.clientY - startY) + 'px';
+        };
+        document.onmousemove = move;
+        document.onmouseup = () => { document.onmousemove = null; };
+    };
+
+    // 3. Hàm tải và chạy trực tiếp code từ GitHub (Tránh màn hình đen)
+    btn.onclick = async () => {
+        if (isDragging) return;
+
+        let win = document.getElementById('game-window');
+        if (win) {
+            win.remove();
+            return;
+        }
+
+        win = document.createElement('div');
+        win.id = 'game-window';
+        Object.assign(win.style, {
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: '800px', height: '550px', backgroundColor: '#fff', zIndex: '2147483646',
+            border: '3px solid #00ff00', borderRadius: '10px', overflow: 'hidden',
+            boxShadow: '0 0 30px rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column'
+        });
+
+        // Tạo vùng chứa nội dung game
+        const content = document.createElement('iframe');
+        content.style.width = '100%';
+        content.style.height = '100%';
+        content.style.border = 'none';
+        win.appendChild(content);
+        document.body.appendChild(win);
+
+        try {
+            // Lấy code trực tiếp từ GitHub
+            const response = await fetch("https://raw.githubusercontent.com/haohancoder/kholuutru/main/admin%20mode%20source%20code%20v1.0.2.9");
+            const rawHtml = await response.text();
+
+            // Ghi code trực tiếp vào iframe để trình duyệt tự render mà không cần qua trang trung gian
+            const doc = content.contentWindow.document;
+            doc.open();
+            doc.write(rawHtml);
+            doc.close();
+
+            // Tự động focus để dùng bàn phím
+            setTimeout(() => content.contentWindow.focus(), 500);
+        } catch (err) {
+            win.innerHTML = "<div style='padding:20px; color:red'>Lỗi tải code: " + err + "</div>";
+        }
+    };
+})();
